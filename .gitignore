@@ -6,3 +6,4 @@
 *.mat
 logs/
 *.sh
+*.txt
