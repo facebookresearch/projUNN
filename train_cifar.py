@@ -1,3 +1,13 @@
+"""
+File: train_cifar.py
+Created Date: Wed Mar 09 2022
+Author: Randall Balestriero
+-----
+Last Modified: Wed Mar 09 2022 3:47:08 AM
+Modified By: Randall Balestriero
+-----
+Copyright (c) Meta Platforms, Inc. and affiliates.
+"""
 from argparse import ArgumentParser
 from typing import List
 import time
@@ -8,10 +18,7 @@ import json
 import torch as ch
 from torch.optim import lr_scheduler
 import torchvision
-
-
 import projunn
-
 from fastargs import get_current_config, Param, Section
 from fastargs.decorators import param
 from ffcv.fields.decoders import IntDecoder, SimpleRGBImageDecoder

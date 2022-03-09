@@ -4,3 +4,5 @@
 *.png
 *.gz
 *.mat
+logs/
+*.sh
