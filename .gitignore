@@ -1,0 +1,6 @@
+*.npz
+*.pyc
+*.out
+*.png
+*.gz
+*.mat

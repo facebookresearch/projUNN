@@ -1,0 +1,19 @@
+data:
+  log_dir: ./logs
+  gpu: 0
+  classes: 10
+  train_dataset: /private/home/rbalestriero/DATASETS/cifar10_train.beton
+  val_dataset: /private/home/rbalestriero/DATASETS/cifar10_val.beton
+training:
+  batch_size: 128
+  epochs: 100
+  lr: 0.5
+  momentum: 0.9
+  lr_peak_epoch: 10
+  weight_decay: 5e-5
+  label_smoothing: 0.01
+  lr_tta: true
+  num_workers: 10
+  scheduler: step
+model:
+  name: resnet9
