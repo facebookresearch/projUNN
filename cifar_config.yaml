@@ -2,8 +2,8 @@ data:
   log_dir: ./logs
   gpu: 0
   classes: 10
-  train_dataset: /private/home/rbalestriero/DATASETS/cifar10_train.beton
-  val_dataset: /private/home/rbalestriero/DATASETS/cifar10_val.beton
+  train_dataset: ../DATASETS/cifar10_train.beton
+  val_dataset: ../DATASETS/cifar10_val.beton
 training:
   batch_size: 128
   epochs: 100
