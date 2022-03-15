@@ -286,8 +286,6 @@ class OrthoRegularizer:
         return loss
 
     def regularize_term(self, projector, param):
-        # print(projector.shape,param.shape)
-        # asdf
         temp = torch.tensordot(
             projector,
             param,
