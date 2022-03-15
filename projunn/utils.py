@@ -1,3 +1,13 @@
+"""
+File: utils.py
+Created Date: Tue Mar 15 2022
+Author: Randall Balestriero and Bobak Kiani
+-----
+Last Modified: Tue Mar 15 2022 7:30:04 PM
+Modified By: Randall Balestriero
+-----
+Copyright (c) Meta Platforms, Inc. and affiliates.
+"""
 import torch
 import numpy as np
 

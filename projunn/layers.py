@@ -1,7 +1,7 @@
 """
 File: layers.py
 Created Date: Wed Mar 09 2022
-Author: Randall Balestriero
+Author: Randall Balestriero and Bobak Kiani
 -----
 Last Modified: Wed Mar 09 2022 10:02:19 PM
 Modified By: Randall Balestriero
