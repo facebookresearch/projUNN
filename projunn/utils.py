@@ -1,13 +1,3 @@
-"""
-File: utils.py
-Created Date: Wed Mar 09 2022
-Author: Randall Balestriero
------
-Last Modified: Wed Mar 09 2022 3:47:51 AM
-Modified By: Randall Balestriero
------
-Copyright (c) Meta Platforms, Inc. and affiliates.
-"""
 import torch
 import numpy as np
 
@@ -60,13 +50,13 @@ def conjugate_transpose(v):
     return torch.conj(torch.transpose(v, -2, -1))
 
 
-def LSI_approximation(A, k=1):
+def LSI_approximation(A, k, eps=1e-2):
     n = A.shape[-1]
     R = torch.empty(n, k, dtype=A.dtype, device=A.device)
     R = orthogonal_(R).type(A.dtype)
     B = np.sqrt(n / k) * conjugate_transpose(R) @ A
     v, e, _ = torch.linalg.svd(B @ conjugate_transpose(B))
-    v = conjugate_transpose(B) @ (v / (torch.sqrt(e.unsqueeze(-2)) + 1e-8))
+    v = conjugate_transpose(B) @ (v / (e.unsqueeze(-2).sqrt() + eps))
     return A @ v, v
 
 
@@ -165,7 +155,7 @@ def projUNN_D(A, a, b, project_on=True):
         ) + add_outer_products(a, b)
 
 
-def projUNN_T(A, a, b):
+def projUNN_T(A, a, b, project_on=True):
     if len(A.shape) == 3:
         batched = True
     else:
@@ -193,7 +183,104 @@ def projUNN_T(A, a, b):
 
     if torch.is_complex(A):
         u = a_and_b @ D
-        return add_outer_products(A.type(D.dtype) @ (s * u), u).type(A.dtype)
+        if project_on:
+            return A + add_outer_products(A.type(D.dtype) @ (s * u), u).type(A.dtype)
+        else:
+            return add_outer_products(A.type(D.dtype) @ (s * u), u).type(A.dtype)
     else:
         u = a_and_b.type(D.dtype) @ D
-        return add_outer_products(A.type(D.dtype) @ (s * u), u).type(A.dtype)
+        if project_on:
+            return A + add_outer_products(A.type(D.dtype) @ (s * u), u).type(A.dtype)
+        else:
+            return add_outer_products(A.type(D.dtype) @ (s * u), u).type(A.dtype)
+
+
+class OrthoRegularizer:
+    def __init__(self, net, kernel_size, penalize_support=False, dtype="real"):
+        self.get_params(net)
+        if isinstance(kernel_size, int):
+            self.kernel_size = [kernel_size, kernel_size]
+        else:
+            self.kernel_size = kernel_size
+        self.penalize_support = penalize_support
+        if penalize_support:
+            self.mult_term = 1.0
+        else:
+            self.mult_term = -1.0
+        if dtype == "real":
+            self.fft_op = torch.fft.rfft2
+        else:
+            self.fft_op = torch.fft.fft2
+
+        self.get_regularizing_locs()
+        self.get_projectors()
+
+    def get_params(self, net):
+        self.params = []
+        self.sizes = []
+        for param in net.parameters():
+            if len(param.shape) == 3:
+                self.params.append(
+                    {"param": param, "size": param.ortho_regularizer_size}
+                )
+        if len(self.params) == 0:
+            raise ValueError(
+                "no orthogonal convolutional parameters found to regularize"
+            )
+
+    def get_regularizing_locs(self):
+        for param_dict in self.params:
+            param_dict["locs"] = self.kernel_to_locs(
+                self.kernel_size, param_dict["size"]
+            )
+
+    def kernel_to_locs(self, kernel_size, input_size):
+        locs = []
+        for i in range(
+            kernel_size[0] // 2 - kernel_size[0] + 1,
+            kernel_size[0] - kernel_size[0] // 2,
+        ):
+            for j in range(
+                kernel_size[1] // 2 - kernel_size[1] + 1,
+                kernel_size[1] - kernel_size[1] // 2,
+            ):
+                locs.append([i, j])
+        return locs
+
+    def get_projectors(self):
+        for param_dict in self.params:
+            self.convert_to_projector(param_dict)
+
+    def convert_to_projector(self, param_dict):
+        basis = torch.zeros(
+            (len(param_dict["locs"]), *param_dict["size"]),
+            device="cuda",
+        )
+        locs = np.stack(param_dict["locs"])
+        locs = np.concatenate([np.arange(len(locs))[:, None], locs], 1)
+        locs = torch.Tensor(locs).long()
+        basis[locs] = 1.0
+        # for i, loc in enumerate(param_dict["locs"]):
+        #     print(loc,basis[i].shape)
+        #     basis[i,loc[0],loc[1]] = 1.0
+        param_dict["projector"] = (
+            self.fft_op(basis, s=param_dict["size"], norm="ortho").flatten(1).conj()
+        )
+
+    def regularize(self):
+        loss = 0.0
+        for param_dict in self.params:
+            loss += self.mult_term * self.regularize_term(
+                param_dict["projector"], param_dict["param"]
+            )
+        return loss
+
+    def regularize_term(self, projector, param):
+        # print(projector.shape,param.shape)
+        # asdf
+        temp = torch.tensordot(
+            projector,
+            param,
+            dims=([-1], [0]),
+        )
+        return torch.sum(torch.abs(temp) ** 2)
