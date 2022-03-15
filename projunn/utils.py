@@ -270,9 +270,6 @@ class OrthoRegularizer:
         locs = np.concatenate([np.arange(len(locs))[:, None], locs], 1)
         locs = torch.Tensor(locs).long()
         basis[locs] = 1.0
-        # for i, loc in enumerate(param_dict["locs"]):
-        #     print(loc,basis[i].shape)
-        #     basis[i,loc[0],loc[1]] = 1.0
         param_dict["projector"] = (
             self.fft_op(basis, s=param_dict["size"], norm="ortho").flatten(1).conj()
         )
