@@ -7,3 +7,5 @@
 logs/
 *.sh
 *.txt
+cifar-10-batches-py/
+MNIST/
