@@ -184,7 +184,7 @@ def projUNN_T(A, a, b, project_on=True):
     if sub_arr.shape[-1] == 2:
         s, D = dim2_eig(sub_arr)
     else:
-        s, D = torch.linalg.eigh(sub_arr)
+        s, D = torch.linalg.eig(sub_arr)
 
     s = torch.exp(s) - 1.0
 
