@@ -206,9 +206,45 @@ def projUNN_T(A, a, b, project_on=True):
 
 
 
+def one_to_two_fft_indices(i, kernel_size):
+    return i // kernel_size[1], i % kernel_size[1]
+
+ 
+
+def two_to_one_fft_indices(i,j, kernel_size):
+    return i*kernel_size[1] + j
+
+ 
+
+def get_matching_hermitian_fft_dim(i, kernel_size, input_size = None):
+    if input_size is None:
+        input_size = kernel_size.copy()
+        input_size[1] *= 2
+    a,b = one_to_two_fft_indices(i, kernel_size)
+    if b == 0 or (b == (kernel_size[1]-1) and (input_size[1]%2) == 0):
+        if a == 0:
+            return -1
+        elif a*2 == (kernel_size[0]):
+            return -1
+        else:
+            return two_to_one_fft_indices( -1*a % kernel_size[0],b, kernel_size )
+    else:
+        return -1
+
+ 
+
+def is_fft_dim_double(i, kernel_size, input_size = None):
+    if input_size is None:
+        input_size = kernel_size.copy()
+        input_size[1] *= 2
+    a,b = one_to_two_fft_indices(i, kernel_size)
+    if b == 0 or (b == (kernel_size[1]-1) and (input_size[1]%2) == 0):
+        return True
+    else:
+        return False
 
 class OrthoRegularizer:
-    def __init__(self, net, kernel_size, penalize_support = False):
+    def __init__(self, net, kernel_size, device = 'cuda:0', penalize_support = False, use_orthogonal = True):
         self.get_params(net)
         if isinstance(kernel_size, int):
             self.kernel_size = [kernel_size,kernel_size]
@@ -219,10 +255,14 @@ class OrthoRegularizer:
             self.mult_term = 1.
         else:
             self.mult_term = -1.
-        if config.use_orthogonal:
+        if use_orthogonal:
             self.fft_op = torch.fft.rfft2
+            self.dtype = torch.float32
         else:
             self.fft_op = torch.fft.fft2
+            self.dtype = torch.complex64
+        self.device = device
+        self.use_orthogonal = use_orthogonal
 
         self.get_regularizing_locs()
         self.get_projectors()
@@ -250,7 +290,7 @@ class OrthoRegularizer:
         return locs
 
     def construct_mask(self, kernel_size,input_size):
-        mask = torch.zeros(kernel_size, dtype = config.default_complex_dtype).to(config.torch_device)
+        mask = torch.zeros(kernel_size, dtype = default_complex_dtype).to(self.device)
         for i in range(kernel_size[0]):
             for j in range(kernel_size[1]):
                 k = two_to_one_fft_indices( i,j, kernel_size )
@@ -265,11 +305,11 @@ class OrthoRegularizer:
 
     def convert_to_projector(self, param_dict):
         basis = torch.zeros(  (len(param_dict['locs']), param_dict['size'][0],param_dict['size'][1]) ,
-                                dtype = config.dtype, device = config.torch_device)
+                                dtype = self.dtype, device = self.device)
         for i, loc in enumerate(param_dict['locs']):
             basis[i][loc[0]][loc[1]] = 1.
         param_dict['projector'] = self.fft_op(basis, s=param_dict['size'], norm = 'ortho')
-        if config.use_orthogonal:
+        if self.use_orthogonal:
             param_dict['mask'] = self.construct_mask(param_dict['projector'].shape[1:],param_dict['size']).reshape(-1)
         param_dict['projector'] = param_dict['projector'].reshape(len(param_dict['locs']), -1).conj()
 
@@ -280,7 +320,7 @@ class OrthoRegularizer:
         return loss
 
     def regularize_term(self, param_dict):
-        if config.use_orthogonal:
+        if self.use_orthogonal:
             temp = torch.tensordot(param_dict['projector']*param_dict['mask'],param_dict['param'], dims = ([-1], [0]))
             temp += torch.tensordot(param_dict['projector']*(1-param_dict['mask']),param_dict['param'], dims = ([-1], [0]))
             temp += torch.tensordot(torch.conj(param_dict['projector'])*(1-param_dict['mask']),torch.conj(param_dict['param']), dims = ([-1], [0]))
@@ -294,12 +334,11 @@ class OrthoRegularizer:
 
 
     def project_term(self,param_dict):
-        if config.use_orthogonal:
+        if self.use_orthogonal:
             temp = torch.tensordot(param_dict['projector']*param_dict['mask'],param_dict['param'].grad, dims = ([-1], [0]))
             temp += torch.tensordot(param_dict['projector']*(1-param_dict['mask']),param_dict['param'].grad, dims = ([-1], [0]))
             temp += torch.tensordot(torch.conj(param_dict['projector'])*(1-param_dict['mask']),torch.conj(param_dict['param'].grad), dims = ([-1], [0]))
         else:
             temp = torch.tensordot(param_dict['projector'],param_dict['param'].grad, dims = ([-1], [0]))
         return torch.einsum('abc,ad->dbc',temp, torch.conj(param_dict['projector']))
-
 
