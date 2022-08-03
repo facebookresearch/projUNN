@@ -197,7 +197,8 @@ def projUNN_T(A, a, b, project_on=True):
         batched = False
     a_hat = torch.matmul(conjugate_transpose(A), a)
 
-    a_and_b = torch.cat((b, a_hat), dim=-1)if batched:
+    a_and_b = torch.cat((b, a_hat), dim=-1)
+    if batched:
         a_and_b = fast_batch_qr_modified(a_and_b)
     else:
         a_and_b, _ = torch.linalg.qr(a_and_b, mode = 'reduced')             # native torch operation seems to be fastest
