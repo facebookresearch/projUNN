@@ -136,25 +136,50 @@ def dim2_eig(A):
     )  # may want to perform qr decomp on the vectors to ensure orthogonality when eigenvalues are very close
 
 
-def projUNN_D(A, a, b, project_on=True):
+def projUNN_D(A, a, b, stable_adder = 1e-8, noise_adder = 0, project_on=True):
+    if len(A.shape) == 3:
+        batched = True
+        batch_size = A.shape[0]
+    else:
+        batched = False
+
+    if noise_adder:
+        a += noise_adder*a.new(a.size()).normal_(0,1)
+        b += noise_adder*b.new(b.size()).normal_(0,1)
+
     rank = a.shape[-1]
     a_hat = conjugate_transpose(A) @ a
     A_tilde = A + add_outer_products(a, b)
 
     a_and_b = torch.cat((b, a_hat), dim=-1)
-    a_and_b, _ = torch.linalg.qr(a_and_b, mode="reduced")
+    if batched:
+        a_and_b = fast_batch_qr_modified(a_and_b)
+    else:
+        a_and_b, _ = torch.linalg.qr(a_and_b, mode = 'reduced')             # native torch operation seems to be fastest
     projectors = conjugate_transpose(a_and_b)
 
-    c_ij = torch.reshape(conjugate_transpose(a) @ a, (rank, rank))
+    if batched:
+        c_ij =  torch.reshape(conjugate_transpose(a)@a, (batch_size,rank, rank))
+    else:
+        c_ij =  torch.reshape(conjugate_transpose(a)@a, (rank, rank))
     a_obasis = projectors @ a_hat
     b_obasis = projectors @ b
 
     sub_arr = add_outer_products(a_obasis, b_obasis)
     sub_arr += add_outer_products(b_obasis, a_obasis)
     sub_arr += torch.einsum("an,bm,nm->ab", b_obasis, torch.conj(b_obasis), c_ij)
-    s, D = torch.linalg.eig(sub_arr.type(torch.double))
-    s = (1.0 / torch.sqrt(s + 1) - 1).type(A.dtype)
+    
+    if sub_arr.shape[-1] == 2:
+        s, D = dim2_eig(sub_arr)
+    else:
+        s, D = torch.linalg.eig(sub_arr)
+
+    if batched:
+        s = s.unsqueeze(1)
+
+    s = (1.0 / torch.sqrt(s + 1 + stable_adder) - 1).type(A.dtype)
     u = a_and_b.type(D.dtype) @ D
+
     if project_on:
         return A_tilde + add_outer_products(A_tilde.type(D.dtype) @ (s * u), u).type(
             A.dtype
@@ -172,8 +197,10 @@ def projUNN_T(A, a, b, project_on=True):
         batched = False
     a_hat = torch.matmul(conjugate_transpose(A), a)
 
-    a_and_b = torch.cat((b, a_hat), dim=-1)
-    a_and_b, _ = torch.linalg.qr(a_and_b, mode="reduced")
+    a_and_b = torch.cat((b, a_hat), dim=-1)if batched:
+        a_and_b = fast_batch_qr_modified(a_and_b)
+    else:
+        a_and_b, _ = torch.linalg.qr(a_and_b, mode = 'reduced')             # native torch operation seems to be fastest
     projectors = conjugate_transpose(a_and_b)
 
     a_obasis = projectors @ a_hat
@@ -204,6 +231,31 @@ def projUNN_T(A, a, b, project_on=True):
         else:
             return add_outer_products(A.type(D.dtype) @ (s * u), u).type(A.dtype)
 
+
+def fast_batch_qr(A):
+    # Uses regular Gram-Schmidt and is much faster over batches
+    # may be unstable when matrix is not skinny
+    def proj(M, v):
+        return M@(conjugate_transpose(M)@v)
+    def norm_squared(M):
+        return torch.sum(M*torch.conj(M),dim = -2,keepdims = True)
+    A[:,:,:1] = A[:,:,:1] / torch.sqrt(norm_squared(A[:,:,:1]))
+    for i in range(1,A.shape[-1]):
+        A[:,:,i:i+1] = A[:,:,i:i+1] - proj(A[:,:,:i],A[:,:,i:i+1])
+        A[:,:,i:i+1] = A[:,:,i:i+1] / torch.sqrt(norm_squared(A[:,:,i:i+1]))
+    return A
+
+def fast_batch_qr_modified(A):
+    # slightly slower but a bit more stable
+    def proj(M, v):
+        return M@(conjugate_transpose(M)@v)
+    def norm_squared(M):
+        return torch.sum(M*torch.conj(M),dim = -2,keepdims = True)
+    A[:,:,:1] = A[:,:,:1] / torch.sqrt(norm_squared(A[:,:,:1]))
+    for i in range(1,A.shape[-1]):
+        A[:,:,i:] = A[:,:,i:] - proj(A[:,:,i-1:i],A[:,:,i:])
+        A[:,:,i:] = A[:,:,i:] / torch.sqrt(norm_squared(A[:,:,i:]))
+    return A
 
 
 def one_to_two_fft_indices(i, kernel_size):
