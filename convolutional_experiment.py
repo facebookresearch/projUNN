@@ -146,7 +146,7 @@ for epoch in range(epochs):
                     l1_weight.shape[1], device="cuda"
                 )
                 print(
-                    f"Current loss is: {loss.item()}, and {torch.sum(diff*diff.conj())}"
+                    f"Current loss is: {loss.item()}, and how far from orthogonal? {torch.sum(diff*diff.conj())}"
                 )
 
     print("epoch train accuracy", accuracy.compute().item())
