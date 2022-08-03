@@ -82,6 +82,9 @@ parser.add_argument(
     "--dataset", type=str, default="CIFAR10", choices=["MNIST", "CIFAR10", "CIFAR100"]
 )
 parser.add_argument("-gamma", type=float, default=0.0)
+parser.add_argument(
+    "--projector", type=str, default="projUNND", choices=["projUNND", "projUNNT"]
+)
 parser.add_argument("--unitary", action="store_true")
 args = parser.parse_args()
 
@@ -96,7 +99,10 @@ model.train()
 # create projector and optionally the optimizer
 def projector(param, update):
     a, b = projunn.utils.LSI_approximation(update, k=1)
-    update = projunn.utils.projUNN_T(param.data, a, b, project_on=False)
+    if args.projector == "projUNND":
+        update = projunn.utils.projUNN_D(param.data, a, b, project_on=False)
+    else:
+        update = projunn.utils.projUNN_T(param.data, a, b, project_on=False)
     return update
 
 
@@ -106,14 +112,12 @@ if args.optimizer == "RMSProp":
     )
 
 accuracy = torchmetrics.Accuracy(compute_on_step=False).cuda()
-losses, accuracies = [], []
 
 if args.gamma:
     regularizer = projunn.utils.OrthoRegularizer(model, [3, 3])
 
 for epoch in range(epochs):
-    if epoch == int(epochs * 0.5) or epoch == int(epochs * 0.75):
-        args.lr /= 3
+    accuracy.reset()
     for iter, (images, labels) in enumerate(train_loader):
         prediction = model(images.cuda())
         if args.gamma:
@@ -137,31 +141,20 @@ for epoch in range(epochs):
         with torch.no_grad():
             accuracy(prediction, labels.cuda())
             if iter % 10 == 0:
-                losses.append(loss.item())
                 l1_weight = model.conv1[0].weight
                 diff = l1_weight @ torch.conj(l1_weight.permute(0, 2, 1)) - torch.eye(
                     l1_weight.shape[1], device="cuda"
                 )
                 print(
-                    f"Current loss is: {losses[-1]}, and {torch.sum(diff*diff.conj())}"
+                    f"Current loss is: {loss.item()}, and {torch.sum(diff*diff.conj())}"
                 )
 
+    print("epoch train accuracy", accuracy.compute().item())
     accuracy.reset()
-    accuracies.append(acc)
-    print("epoch train accuracy", acc)
     model.eval()
     with torch.no_grad():
         for iter, (images, labels) in enumerate(test_loader):
             prediction = model(images.cuda())
             accuracy(prediction, labels.cuda())
-    acc = accuracy.compute().item()
-    accuracy.reset()
-    accuracies.append(acc)
-    print("epoch test accuracy", acc)
+    print("epoch test accuracy", accuracy.compute().item())
     model.train()
-
-np.savez(
-    filename,
-    losses=losses,
-    accuracies=accuracies,
-)
