@@ -74,6 +74,7 @@ def load_data(name):
 parser = argparse.ArgumentParser()
 parser.add_argument("-lr", type=float, default=1.0)
 parser.add_argument("-lr_divider", type=float, default=10.0)
+parser.add_argument("--rank", type=int, default=1)
 parser.add_argument("-bs", type=int, default=256)
 parser.add_argument(
     "--optimizer", type=str, default="RMSProp", choices=["RMSProp", "SGD"]
@@ -81,7 +82,7 @@ parser.add_argument(
 parser.add_argument(
     "--dataset", type=str, default="CIFAR10", choices=["MNIST", "CIFAR10", "CIFAR100"]
 )
-parser.add_argument("-gamma", type=float, default=0.0)
+parser.add_argument("--gamma", type=float, default=0.0)
 parser.add_argument(
     "--projector", type=str, default="projUNND", choices=["projUNND", "projUNNT"]
 )
@@ -98,7 +99,7 @@ model.train()
 
 # create projector and optionally the optimizer
 def projector(param, update):
-    a, b = projunn.utils.LSI_approximation(update, k=1)
+    a, b = projunn.utils.LSI_approximation(update, k=args.rank)
     if args.projector == "projUNND":
         update = projunn.utils.projUNN_D(param.data, a, b, project_on=False)
     else:
@@ -141,12 +142,12 @@ for epoch in range(epochs):
         with torch.no_grad():
             accuracy(prediction, labels.cuda())
             if iter % 10 == 0:
-                l1_weight = model.conv1[0].weight
-                diff = l1_weight @ torch.conj(l1_weight.permute(0, 2, 1)) - torch.eye(
-                    l1_weight.shape[1], device="cuda"
+                w = model.conv1[0].weight
+                diff = w @ torch.conj(w.permute(0, 2, 1)) - torch.eye(
+                    w.shape[1], device="cuda"
                 )
                 print(
-                    f"Current loss is: {loss.item()}, and how far from orthogonal? {torch.sum(diff*diff.conj())}"
+                    f"Current loss is: {loss.item()}, and far from orthogonal? {diff.norm()}"
                 )
 
     print("epoch train accuracy", accuracy.compute().item())
