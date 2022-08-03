@@ -168,7 +168,7 @@ def projUNN_D(A, a, b, stable_adder = 1e-8, noise_adder = 0, project_on=True):
     sub_arr = add_outer_products(a_obasis, b_obasis)
     sub_arr += add_outer_products(b_obasis, a_obasis)
     if batched:
-        torch.einsum('dan,dbm,dnm->dab', b_obasis, torch.conj(b_obasis), c_ij)
+        sub_arr += torch.einsum('dan,dbm,dnm->dab', b_obasis, torch.conj(b_obasis), c_ij)
     else:
         sub_arr += torch.einsum("an,bm,nm->ab", b_obasis, torch.conj(b_obasis), c_ij)
     
