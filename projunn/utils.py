@@ -136,7 +136,7 @@ def dim2_eig(A):
     )  # may want to perform qr decomp on the vectors to ensure orthogonality when eigenvalues are very close
 
 
-def projUNN_D(A, a, b, stable_adder = 1e-8, noise_adder = 0, project_on=True):
+def projUNN_D(A, a, b, stable_adder = 1e-8, noise_adder = 1e-7, project_on=True):
     if len(A.shape) == 3:
         batched = True
         batch_size = A.shape[0]
@@ -193,11 +193,16 @@ def projUNN_D(A, a, b, stable_adder = 1e-8, noise_adder = 0, project_on=True):
         ) + add_outer_products(a, b)
 
 
-def projUNN_T(A, a, b, project_on=True):
+def projUNN_T(A, a, b, noise_adder = 1e-7, project_on=True):
     if len(A.shape) == 3:
         batched = True
     else:
         batched = False
+
+    if noise_adder:
+        a += noise_adder*a.new(a.size()).normal_(0,1)
+        b += noise_adder*b.new(b.size()).normal_(0,1)
+
     a_hat = torch.matmul(conjugate_transpose(A), a)
 
     a_and_b = torch.cat((b, a_hat), dim=-1)
