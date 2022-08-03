@@ -60,7 +60,7 @@ def conjugate_transpose(v):
     return torch.conj(torch.transpose(v, -2, -1))
 
 
-def LSI_approximation(A, k, eps=1e-2):
+def LSI_approximation(A, k, eps=1e-6):
     n = A.shape[-1]
     R = torch.empty(n, k, dtype=A.dtype, device=A.device)
     R = orthogonal_(R).type(A.dtype)
