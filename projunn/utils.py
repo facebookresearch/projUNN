@@ -178,7 +178,7 @@ def dim2_eig(A):
     )  # may want to perform qr decomp on the vectors to ensure orthogonality when eigenvalues are very close
 
 
-def projUNN_D(A, a, b, stable_adder = 1e-8, noise_adder = 1e-7, project_on=True):
+def projUNN_D(A, a, b, stable_adder = 1e-8, noise_adder = 0, project_on=True):
     if len(A.shape) == 3:
         batched = True
         batch_size = A.shape[0]
@@ -235,7 +235,7 @@ def projUNN_D(A, a, b, stable_adder = 1e-8, noise_adder = 1e-7, project_on=True)
         ) + add_outer_products(a, b)
 
 
-def projUNN_T(A, a, b, noise_adder = 1e-7, project_on=True):
+def projUNN_T(A, a, b, noise_adder = 0, project_on=True):
     if len(A.shape) == 3:
         batched = True
     else:
