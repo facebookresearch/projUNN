@@ -12,7 +12,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 import torch
 from torch import nn
 from . import utils
-
+import numpy as np
 
 class FullWidthConv2d(nn.Conv2d):
     def __init__(
@@ -185,6 +185,7 @@ class OrthogonalRNN(nn.Module):
         nn.init.kaiming_normal_(self.input_layer.weight.data, nonlinearity="relu")
         utils.orthogonal_(self.recurrent_layer.weight.data)
         self.recurrent_layer.weight.needs_projection = True
+        self.lin = nn.Linear(hidden_size, 10)
 
     def default_hidden(self, input):
         return input.new_zeros(input.size(0), self.hidden_size, requires_grad=False)
@@ -196,7 +197,7 @@ class OrthogonalRNN(nn.Module):
             hidden = self.nonlinearity(
                 self.input_layer(input[:, step_i, :]) + self.recurrent_layer(hidden)
             )
-        return hidden
+        return self.lin(hidden)
 
 
 
@@ -215,7 +216,7 @@ def henaff_init_(A):
     size = A.size(0) // 2
     diag = torch.zeros((size,2,2), dtype = A.dtype, device = A.device)
     diag[:,0,1] = A.new(size).uniform_(-np.pi, np.pi)
-    diag = diag - conjugate_transpose(diag)
+    diag = diag - diag.conj().T
     diag = torch.matrix_exp(diag)
     with torch.no_grad():
         A.copy_(torch.block_diag(*diag))

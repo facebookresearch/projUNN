@@ -62,7 +62,7 @@ def load_data(name):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-lr", type=float, default=1.0)
+parser.add_argument("-lr", type=float, default=0.001)
 parser.add_argument("-lr_divider", type=float, default=10.0)
 parser.add_argument("--rank", type=int, default=1)
 parser.add_argument("-bs", type=int, default=256)
@@ -70,7 +70,7 @@ parser.add_argument(
     "--optimizer", type=str, default="RMSProp", choices=["RMSProp", "SGD"]
 )
 parser.add_argument(
-    "--dataset", type=str, default="CIFAR10", choices=["MNIST", "CIFAR10", "CIFAR100"]
+    "--dataset", type=str, default="MNIST", choices=["MNIST", "CIFAR10", "CIFAR100"]
 )
 parser.add_argument("--gamma", type=float, default=0.0)
 parser.add_argument(
@@ -89,7 +89,7 @@ model.train()
 
 # create projector and optionally the optimizer
 def projector(param, update):
-    a, b = projunn.utils.LSI_approximation(update, k=args.rank)
+    a, b = projunn.utils.LSI_approximation(update/args.lr_divider, k=args.rank)
     if args.projector == "projUNND":
         update = projunn.utils.projUNN_D(param.data, a, b, project_on=False)
     else:
@@ -127,7 +127,7 @@ for epoch in range(epochs):
             for param in model.parameters():
                 update = -args.lr * param.grad
                 if hasattr(param, "needs_projection"):
-                    update = projector(update)
+                    update = projector(param, update)
                 param.data.add_(update)
         with torch.no_grad():
             accuracy(prediction, labels.cuda())
