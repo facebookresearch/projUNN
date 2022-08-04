@@ -70,6 +70,48 @@ def LSI_approximation(A, k, eps=1e-6):
     return A @ v, v
 
 
+def column_sampling_approximation(A, k, c = None, sample_uniformly = False):
+    # based off of https://epubs.siam.org/doi/pdf/10.1137/S0097539704442696?casa_token=mI9Kbp7Od2oAAAAA:vHnO1nvtop33gUQ_MJgYa7M_6WdssLhMMvE-CTxLRGZQhvnT-ByyrXKOAuxRrdR_2Wqn5ssdX3c
+    if len(A.shape) == 2:
+        n = A.shape[-1]
+        if c is None:
+            c = k
+
+        if sample_uniformly:
+            indices = uniform_random_indices(n,c, device = A.device)
+            C_mat = A[:,indices]/math.sqrt(c/n)
+        else:
+            p = torch.sqrt(torch.sum(torch.abs(A)*torch.abs(A), 0))
+            indices =  torch.multinomial(p, num_samples=c, replacement=False)
+            C_mat = A[:,indices]/torch.sqrt(c*p[indices])
+        # e, v = torch.linalg.eigh(conjugate_transpose(C_mat)@C_mat)
+        v,e,_ = torch.linalg.svd(conjugate_transpose(C_mat)@C_mat)
+        h = C_mat@v[:,-k:]/(e[-k:]+1e-8)
+
+        return h, conjugate_transpose(conjugate_transpose(h)@A)*e[-k:]
+
+    else:
+        n = A.shape[-1]
+        if c is None:
+            c = k
+
+        if sample_uniformly:
+            indices = uniform_random_indices(n,c, device = A.device)
+            C_mat = A[:,:,indices]/math.sqrt(c/n)
+        else:
+            p = torch.sqrt(torch.sum(torch.abs(A)*torch.abs(A), 1))
+            p_prob = torch.sqrt(torch.sum(p*p,0))
+            indices =  torch.multinomial(p_prob, num_samples=c, replacement=False)
+            C_mat = A[:,:,indices]/torch.sqrt(c*p[:,indices].unsqueeze(1))
+        # e, v = torch.linalg.eigh(conjugate_transpose(C_mat)@C_mat)
+        v,e,_ = torch.linalg.svd(conjugate_transpose(C_mat)@C_mat)
+        h = C_mat@v[:,:,-k:]/(e[:,-k:].unsqueeze(1)+1e-8)
+
+        return h, conjugate_transpose(conjugate_transpose(h)@A)*e[:,-k:].unsqueeze(1)
+
+
+
+
 def add_outer_products(a, b):
     return a @ conjugate_transpose(b)
 
