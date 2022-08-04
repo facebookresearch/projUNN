@@ -23,7 +23,7 @@ class FullWidthConv2d(nn.Conv2d):
         stride=1,
         bias=True,
         dtype="real",
-        init_as_id=False,
+        init_as_id=True,
         **kwargs,
     ):
         self.real = dtype == "real"
@@ -197,3 +197,26 @@ class OrthogonalRNN(nn.Module):
                 self.input_layer(input[:, step_i, :]) + self.recurrent_layer(hidden)
             )
         return hidden
+
+
+
+def cayley_init_(A):
+    size = A.size(0) // 2
+    diag = torch.zeros((size,2,2), dtype = A.dtype, device = A.device)
+    diag[:,0,1] = A.new(size).uniform_(0., np.pi / 2.)
+    diag[:,0,1] = -torch.sqrt((1. - torch.cos(diag[:,0,1]))/(1. + torch.cos(diag[:,0,1])))
+    diag -= conjugate_transpose(diag)
+    diag = torch.matrix_exp(diag)
+    with torch.no_grad():
+        A.copy_(torch.block_diag(*diag))
+        return A
+
+def henaff_init_(A):
+    size = A.size(0) // 2
+    diag = torch.zeros((size,2,2), dtype = A.dtype, device = A.device)
+    diag[:,0,1] = A.new(size).uniform_(-np.pi, np.pi)
+    diag = diag - conjugate_transpose(diag)
+    diag = torch.matrix_exp(diag)
+    with torch.no_grad():
+        A.copy_(torch.block_diag(*diag))
+        return A

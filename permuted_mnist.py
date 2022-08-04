@@ -25,7 +25,8 @@ class OrthogonalRNN(nn.Module):
     def reset_parameters(self):
         nn.init.kaiming_normal_(self.input_kernel.weight.data, nonlinearity="relu")
         if args.unitary:
-            self.recurrent_kernel.weight.copy_(torch.eye(self.hidden_size))
+            # self.recurrent_kernel.weight.copy_(torch.eye(self.hidden_size))
+            projunn.layers.henaff_init(self.recurrent_kernel.weight.data)
             self.recurrent_kernel.weight.needs_projection = True
 
     def default_hidden(self, input):
