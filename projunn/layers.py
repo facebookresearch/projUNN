@@ -183,7 +183,8 @@ class OrthogonalRNN(nn.Module):
 
         # initialization
         nn.init.kaiming_normal_(self.input_layer.weight.data, nonlinearity="relu")
-        utils.orthogonal_(self.recurrent_layer.weight.data)
+        with torch.no_grad():
+            self.recurrent_layer.weight.copy_(torch.eye(hidden_size))
         self.recurrent_layer.weight.needs_projection = True
         self.lin = nn.Linear(hidden_size, 10)
 

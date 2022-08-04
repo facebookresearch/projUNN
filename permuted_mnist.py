@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description='Exponential Layer MNIST Task')
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--hidden_size', type=int, default=256)
 parser.add_argument('--epochs', type=int, default=70)
-parser.add_argument('--lr', type=float, default=7e-4)
+parser.add_argument('--lr', type=float, default=0.0001)
 parser.add_argument("--permute", action="store_true")
 parser.add_argument(
     "--optimizer", type=str, default="RMSProp", choices=["RMSProp", "SGD"]
@@ -93,7 +93,10 @@ def main():
         model.eval()
         with torch.no_grad():
             for batch_x, batch_y in test_loader:
-                batch_x = batch_x.cuda().view(-1, 784)
+                if args.permute:
+                    batch_x = batch_x.cuda().view(-1, 784,1)[:,permutation]
+                else:
+                    batch_x = batch_x.cuda().view(-1, 784,1)
                 logits = model(batch_x)
                 accuracy.update(logits, batch_y.cuda())
         print()
