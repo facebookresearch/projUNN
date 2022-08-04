@@ -1,15 +1,5 @@
 """
 File: mnist_experiments.py
-Project: torchstrap
------
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-"""
-
-"""
-File: mnist_experiments.py
 Created Date: Wed Mar 09 2022
 Author: Randall Balestriero
 -----
