@@ -173,34 +173,53 @@ class OrthogonalRNN(nn.Module):
         super(OrthogonalRNN, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.recurrent_layer = nn.Linear(
-            in_features=self.hidden_size, out_features=self.hidden_size, bias=False
-        )
-        self.input_layer = nn.Linear(
-            in_features=self.input_size, out_features=self.hidden_size, bias=True
-        )
-        self.nonlinearity = nn.ReLU(inplace=True)
+        self.recurrent_kernel = nn.Linear(in_features=self.hidden_size, out_features=self.hidden_size, bias=False)
+        self.recurrent_kernel.weight.needs_projection = True
+        self.input_kernel = nn.Linear(in_features=self.input_size, out_features=self.hidden_size, bias=False)
+        self.nonlinearity = modrelu(hidden_size)
 
-        # initialization
-        nn.init.kaiming_normal_(self.input_layer.weight.data, nonlinearity="relu")
-        with torch.no_grad():
-            self.recurrent_layer.weight.copy_(torch.eye(hidden_size))
-        self.recurrent_layer.weight.needs_projection = True
-        self.lin = nn.Linear(hidden_size, 10)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.kaiming_normal_(self.input_kernel.weight.data, nonlinearity="relu")
+        # orthogonal_(self.input_kernel.weight.data)
+        nn.init.eye_(self.recurrent_kernel.weight.data)
+        # henaff_init_(self.recurrent_kernel.weight.data)
 
     def default_hidden(self, input):
         return input.new_zeros(input.size(0), self.hidden_size, requires_grad=False)
 
-    def forward(self, input, hidden=None):
+    def forward(self, input, hidden = None):
         if hidden is None:
             hidden = self.default_hidden(input)
-        for step_i in range(input.shape[1]):
-            hidden = self.nonlinearity(
-                self.input_layer(input[:, step_i, :]) + self.recurrent_layer(hidden)
-            )
-        return self.lin(hidden)
+        input = self.input_kernel(input)
+        hidden = self.recurrent_kernel(hidden)
+        out = input + hidden
+        out = self.nonlinearity(out)
+
+        return out, out
 
 
+# taken and modified from https://github.com/Lezcano/expRNN/blob/master/orthogonal.py
+class modrelu(nn.Module):
+    def __init__(self, features):
+        # For now we just support square layers
+        super(modrelu, self).__init__()
+        self.features = features
+        self.b = nn.Parameter(torch.Tensor(self.features))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.b.data.uniform_(-0.01, 0.01)
+        # nn.init.zeros_(self.b.data)
+
+    def forward(self, inputs):
+        norm = torch.abs(inputs) + 1e-6
+        biased_norm = norm + self.b
+        magnitude = nn.functional.relu(biased_norm)
+        phase = torch.sgn(inputs)
+
+        return phase * magnitude
 
 def cayley_init_(A):
     size = A.size(0) // 2
