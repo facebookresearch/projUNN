@@ -12,7 +12,7 @@ Copyright (c) Meta Platforms, Inc. and affiliates.
 import torch
 from torch import nn
 from . import utils
-
+import numpy as np
 
 class FullWidthConv2d(nn.Conv2d):
     def __init__(
@@ -169,35 +169,63 @@ def get_matching_hermitian_fft_dim(i, kernel_size, input_size=None):
 
 # taken and modified from https://github.com/Lezcano/expRNN/blob/master/orthogonal.py
 class OrthogonalRNN(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, nonlinearity = None):
         super(OrthogonalRNN, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
-        self.recurrent_layer = nn.Linear(
-            in_features=self.hidden_size, out_features=self.hidden_size, bias=False
-        )
-        self.input_layer = nn.Linear(
-            in_features=self.input_size, out_features=self.hidden_size, bias=True
-        )
-        self.nonlinearity = nn.ReLU(inplace=True)
+        self.recurrent_kernel = nn.Linear(in_features=self.hidden_size, out_features=self.hidden_size, bias=False)
+        self.recurrent_kernel.weight.needs_projection = True
+        self.input_kernel = nn.Linear(in_features=self.input_size, out_features=self.hidden_size, bias=False)
+        if nonlinearity is None:
+            self.nonlinearity = modrelu(hidden_size)
+        else:
+            self.nonlinearity = nonlinearity()
 
-        # initialization
-        nn.init.kaiming_normal_(self.input_layer.weight.data, nonlinearity="relu")
-        utils.orthogonal_(self.recurrent_layer.weight.data)
-        self.recurrent_layer.weight.needs_projection = True
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        nn.init.kaiming_normal_(self.input_kernel.weight.data, nonlinearity="relu")
+        # orthogonal_(self.input_kernel.weight.data)
+        nn.init.eye_(self.input_kernel.weight.data)
+        # henaff_init_(self.recurrent_kernel.weight.data)
 
     def default_hidden(self, input):
         return input.new_zeros(input.size(0), self.hidden_size, requires_grad=False)
 
-    def forward(self, input, hidden=None):
+    def forward(self, input, hidden = None):
         if hidden is None:
             hidden = self.default_hidden(input)
-        for step_i in range(input.shape[1]):
-            hidden = self.nonlinearity(
-                self.input_layer(input[:, step_i, :]) + self.recurrent_layer(hidden)
-            )
-        return hidden
+        input = self.input_kernel(input)
+        hidden = self.recurrent_kernel(hidden)
+        out = input + hidden
+        out = self.nonlinearity(out)
 
+        return out, out
+
+
+# taken and modified from https://github.com/Lezcano/expRNN/blob/master/orthogonal.py
+class modrelu(nn.Module):
+    def __init__(self, features):
+        # For now we just support square layers
+        super(modrelu, self).__init__()
+        self.features = features
+        self.b = nn.Parameter(torch.Tensor(self.features))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        self.b.data.uniform_(-0.01, 0.01)
+        # nn.init.zeros_(self.b.data)
+
+    def forward(self, inputs):
+        norm = torch.abs(inputs) + 1e-6
+        biased_norm = norm + self.b
+        magnitude = nn.functional.relu(biased_norm)
+        phase = torch.sgn(inputs)
+
+        return phase * magnitude
+
+def conjugate_transpose(v):
+    return torch.conj(torch.transpose(v, -2, -1))
 
 
 def cayley_init_(A):
@@ -210,6 +238,7 @@ def cayley_init_(A):
     with torch.no_grad():
         A.copy_(torch.block_diag(*diag))
         return A
+
 
 def henaff_init_(A):
     size = A.size(0) // 2
