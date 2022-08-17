@@ -1,4 +1,4 @@
-# ProjUNN: efficient learning of orhtogonal or unitary weights by low-rank updates
+# ProjUNN: efficient learning of orthogonal or unitary weights by low-rank updates
 
 
 ## Convolutional orthogonality/unitarity constraints
