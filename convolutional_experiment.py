@@ -17,6 +17,7 @@ import projunn
 import numpy as np
 import os
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def load_data(name):
 
@@ -83,7 +84,7 @@ args = parser.parse_args()
 train_loader, test_loader, epochs, channels, length = load_data(args.dataset)
 model = projunn.models.ResNet9(
     channels, num_classes=10, image_length=length, unitary=args.unitary
-).cuda()
+).to(device)
 model.train()
 
 
@@ -102,7 +103,7 @@ if args.optimizer == "RMSProp":
         model.parameters(), projector=projector, lr=args.lr
     )
 
-accuracy = torchmetrics.Accuracy(compute_on_step=False).cuda()
+accuracy = torchmetrics.classification.MulticlassAccuracy(num_classes = 10, compute_on_step=False).to(device)
 
 if args.gamma:
     regularizer = projunn.utils.OrthoRegularizer(model, [3, 3])
@@ -110,14 +111,14 @@ if args.gamma:
 for epoch in range(epochs):
     accuracy.reset()
     for iter, (images, labels) in enumerate(train_loader):
-        prediction = model(images.cuda())
+        prediction = model(images.to(device))
         if args.gamma:
             loss = (
-                torch.nn.functional.cross_entropy(prediction, labels.cuda())
+                torch.nn.functional.cross_entropy(prediction, labels.to(device))
                 + regularizer.regularize() * args.gamma
             )
         else:
-            loss = torch.nn.functional.cross_entropy(prediction, labels.cuda())
+            loss = torch.nn.functional.cross_entropy(prediction, labels.to(device))
 
         model.zero_grad()
         loss.backward()
@@ -130,11 +131,11 @@ for epoch in range(epochs):
                     update = projector(param, update)
                 param.data.add_(update)
         with torch.no_grad():
-            accuracy(prediction, labels.cuda())
+            accuracy(prediction, labels.to(device))
             if iter % 10 == 0:
                 w = model.conv1[0].weight
                 diff = w @ torch.conj(w.permute(0, 2, 1)) - torch.eye(
-                    w.shape[1], device="cuda"
+                    w.shape[1], device=device
                 )
                 print(
                     f"Current loss is: {loss.item()}, and far from orthogonal? {diff.norm()}"
@@ -145,7 +146,7 @@ for epoch in range(epochs):
     model.eval()
     with torch.no_grad():
         for iter, (images, labels) in enumerate(test_loader):
-            prediction = model(images.cuda())
-            accuracy(prediction, labels.cuda())
+            prediction = model(images.to(device))
+            accuracy(prediction, labels.to(device))
     print("epoch test accuracy", accuracy.compute().item())
     model.train()
